@@ -1,7 +1,42 @@
 services:
+
   healthcare-app:
     build: .
     container_name: healthcare-app
     restart: unless-stopped
     ports:
       - "80:5000"
+    environment:
+      DB_HOST: healthcare-db
+      DB_NAME: ${POSTGRES_DB:?Database name missing}
+      DB_USER: ${POSTGRES_USER:?Database user missing}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Database password missing}
+    depends_on:
+      healthcare-db:
+        condition: service_healthy
+
+  healthcare-db:
+    image: postgres:16-alpine
+    container_name: healthcare-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Database name missing}
+      POSTGRES_USER: ${POSTGRES_USER:?Database user missing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password missing}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=20
+    volumes:
+      - healthcare_db_data:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  healthcare_db_data:
