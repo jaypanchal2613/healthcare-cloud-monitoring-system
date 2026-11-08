@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Cloud Monitoring</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f5f9;
+            margin: 0;
+            padding: 30px;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: auto;
+        }
+
+        .header {
+            background: #174b75;
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+        }
+
+        .card {
+            background: white;
+            padding: 22px;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #ddd;
+        }
+
+        .healthy {
+            color: green;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="header">
+            <h1>Healthcare Cloud Monitoring System</h1>
+            <p>Cloud-based Healthcare Application Dashboard</p>
+        </div>
+
+        <div class="card">
+            <h2>Application Overview</h2>
+            <p>Application: Healthcare Cloud System</p>
+            <p>Deployment: AWS EC2</p>
+            <p>Container Platform: Docker</p>
+            <p>Status: <span class="healthy">Running</span></p>
+        </div>
+
+        <div class="card">
+            <h2>System Health</h2>
+            <p id="health">Checking application health...</p>
+        </div>
+
+    </div>
+
+    <script>
+        fetch("/health")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("health").innerText =
+                    "Status: " + data.status;
+            })
+            .catch(() => {
+                document.getElementById("health").innerText =
+                    "Application health check failed";
+            });
+    </script>
+</body>
+</html>
