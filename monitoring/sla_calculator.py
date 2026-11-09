@@ -19,12 +19,14 @@ def calculate_sla():
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Get monitoring records from the last 24 hours
     cursor.execute("""
         SELECT
             service_name,
             COUNT(*) AS total_checks,
-            SUM(CASE WHEN status = 'UP' THEN 1 ELSE 0 END) AS successful_checks
+            COUNT(*) FILTER (WHERE status = 'UP') AS successful_checks
         FROM monitoring_logs
+        WHERE checked_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
         GROUP BY service_name
         ORDER BY service_name
     """)
@@ -33,7 +35,11 @@ def calculate_sla():
 
     print("\nHEALTHCARE CLOUD SLA REPORT")
     print("============================")
+    print("Monitoring Period: Last 24 Hours")
     print("SLA Target:", SLA_TARGET, "%")
+
+    if not results:
+        print("\nNo monitoring records found in the last 24 hours.")
 
     for service, total, successful in results:
 
@@ -48,6 +54,7 @@ def calculate_sla():
         print("\nService:", service)
         print("Total Checks:", total)
         print("Successful Checks:", successful)
+        print("Failed Checks:", total - successful)
         print("Availability:", round(availability, 2), "%")
         print("SLA Status:", compliance)
 

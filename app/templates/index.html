@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Healthcare Cloud Monitoring Dashboard</title>
 
     <style>
@@ -36,6 +37,7 @@
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 18px;
             margin-top: 20px;
+            margin-bottom: 20px;
         }
 
         .card {
@@ -43,6 +45,7 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 8px #ddd;
+            margin-bottom: 18px;
         }
 
         .card h3 {
@@ -63,9 +66,28 @@
             color: red;
         }
 
+        .warning {
+            color: #b7791f;
+        }
+
+        .sla-compliant {
+            color: green;
+            font-weight: bold;
+        }
+
+        .sla-violation {
+            color: red;
+            font-weight: bold;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 650px;
         }
 
         th, td {
@@ -83,6 +105,11 @@
             font-size: 13px;
         }
 
+        .service-title {
+            color: #174b75;
+            margin-bottom: 15px;
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 12px;
@@ -91,19 +118,26 @@
             .card {
                 overflow-x: auto;
             }
+
+            .header {
+                padding: 18px;
+            }
         }
     </style>
 </head>
 
 <body>
+
 <div class="container">
 
+    <!-- Dashboard Header -->
     <div class="header">
         <h1>Healthcare Cloud Monitoring System</h1>
         <p>AWS EC2 | Docker | Flask | PostgreSQL</p>
         <p>Live Application Health and SLA Monitoring</p>
     </div>
 
+    <!-- Main Monitoring Cards -->
     <div class="grid">
 
         <div class="card">
@@ -139,42 +173,151 @@
 
     </div>
 
+    <!-- Application SLA Details -->
+    <div class="card">
+        <h2 class="service-title">Application SLA Report</h2>
+
+        <div class="grid">
+            <div>
+                <h3>Successful Checks</h3>
+                <div class="value healthy" id="app-success">--</div>
+            </div>
+
+            <div>
+                <h3>Failed Checks</h3>
+                <div class="value unhealthy" id="app-failed">--</div>
+            </div>
+
+            <div>
+                <h3>SLA Compliance</h3>
+                <div class="value" id="app-sla-status">--</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database SLA Details -->
+    <div class="card">
+        <h2 class="service-title">Database SLA Report</h2>
+
+        <div class="grid">
+            <div>
+                <h3>Successful Checks</h3>
+                <div class="value healthy" id="db-success">--</div>
+            </div>
+
+            <div>
+                <h3>Failed Checks</h3>
+                <div class="value unhealthy" id="db-failed">--</div>
+            </div>
+
+            <div>
+                <h3>SLA Compliance</h3>
+                <div class="value" id="db-sla-status">--</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monitoring History -->
     <div class="card">
         <h2>Recent Monitoring History</h2>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Service</th>
-                    <th>Status</th>
-                    <th>Response Time</th>
-                    <th>Last Checked</th>
-                </tr>
-            </thead>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Status</th>
+                        <th>Response Time</th>
+                        <th>Last Checked</th>
+                    </tr>
+                </thead>
 
-            <tbody id="history">
-                <tr>
-                    <td colspan="4">Loading monitoring records...</td>
-                </tr>
-            </tbody>
-        </table>
+                <tbody id="history">
+                    <tr>
+                        <td colspan="4">Loading monitoring records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
+    <!-- Monitoring Information -->
     <div class="card">
         <h3>Monitoring Information</h3>
-        <p id="last-updated">Waiting for monitoring data...</p>
+
+        <p id="monitoring-period">
+            Monitoring Period: Last 24 Hours
+        </p>
+
+        <p id="last-updated">
+            Waiting for monitoring data...
+        </p>
+
         <p class="note">
             Availability is calculated from recorded health checks
-            during the last 24 hours. It is an indicative metric,
-            not a contractual SLA measurement.
+            during the last 24 hours. SLA compliance is based on
+            check-based availability and is not a contractual
+            uptime measurement.
         </p>
     </div>
 
 </div>
 
+
 <script>
+
+    // Update service status
+    function displayStatus(elementId, service) {
+
+        const element = document.getElementById(elementId);
+
+        if (service) {
+
+            element.textContent = service.status;
+
+            element.className =
+                "value " +
+                (service.status === "UP" ? "healthy" : "unhealthy");
+
+        } else {
+
+            element.textContent = "NO DATA";
+            element.className = "value unhealthy";
+        }
+    }
+
+
+    // Update SLA information
+    function displaySLA(prefix, record) {
+
+        if (!record) {
+            return;
+        }
+
+        document.getElementById(prefix + "-success").textContent =
+            record.successful_checks;
+
+        document.getElementById(prefix + "-failed").textContent =
+            record.failed_checks;
+
+        const statusElement =
+            document.getElementById(prefix + "-sla-status");
+
+        statusElement.textContent = record.sla_status;
+
+        statusElement.className =
+            "value " +
+            (record.sla_status === "COMPLIANT"
+                ? "sla-compliant"
+                : "sla-violation");
+    }
+
+
+    // Load monitoring information
     async function loadMonitoringData() {
+
         try {
+
             const response = await fetch("/api/monitoring");
 
             if (!response.ok) {
@@ -183,7 +326,8 @@
 
             const data = await response.json();
 
-            // Display service status
+
+            // Find application and database status
             const app = data.services.find(
                 item => item.service === "Flask Application"
             );
@@ -192,30 +336,21 @@
                 item => item.service === "PostgreSQL Database"
             );
 
-            function displayStatus(elementId, service) {
-                const element = document.getElementById(elementId);
 
-                if (service) {
-                    element.innerText = service.status;
-                    element.className =
-                        "value " +
-                        (service.status === "UP" ? "healthy" : "unhealthy");
-                } else {
-                    element.innerText = "NO DATA";
-                    element.className = "value unhealthy";
-                }
-            }
-
+            // Display current service status
             displayStatus("app-status", app);
             displayStatus("db-status", db);
 
-            document.getElementById("response-time").innerText =
+
+            // Display application response time
+            document.getElementById("response-time").textContent =
                 "Response time: " +
                 (app && app.response_time_ms !== null
                     ? app.response_time_ms + " ms"
                     : "--");
 
-            // Display availability
+
+            // Find availability records
             const appAvailability = data.availability.find(
                 item => item.service === "Flask Application"
             );
@@ -224,56 +359,115 @@
                 item => item.service === "PostgreSQL Database"
             );
 
-            document.getElementById("app-availability").innerText =
-                appAvailability ? appAvailability.availability + "%" : "--";
 
-            document.getElementById("db-availability").innerText =
-                dbAvailability ? dbAvailability.availability + "%" : "--";
+            // Display availability percentages
+            document.getElementById("app-availability").textContent =
+                appAvailability
+                    ? appAvailability.availability + "%"
+                    : "--";
 
-            document.getElementById("sla-target").innerText =
+            document.getElementById("db-availability").textContent =
+                dbAvailability
+                    ? dbAvailability.availability + "%"
+                    : "--";
+
+
+            // Display SLA target
+            document.getElementById("sla-target").textContent =
                 data.sla_target + "%";
 
-            // Display recent history
-            const historyElement = document.getElementById("history");
-            historyElement.innerHTML = "";
 
-            data.history.forEach(item => {
+            // Display SLA reports
+            displaySLA("app", appAvailability);
+            displaySLA("db", dbAvailability);
+
+
+            // Display monitoring period
+            document.getElementById("monitoring-period").textContent =
+                "Monitoring Period: " +
+                (data.monitoring_period || "Last 24 Hours");
+
+
+            // Display recent monitoring history
+            const historyElement =
+                document.getElementById("history");
+
+            historyElement.replaceChildren();
+
+            if (!data.history || data.history.length === 0) {
+
                 const row = document.createElement("tr");
+                const cell = document.createElement("td");
 
-                const responseTime =
-                    item.response_time_ms !== null
-                        ? item.response_time_ms + " ms"
-                        : "--";
+                cell.colSpan = 4;
+                cell.textContent = "No monitoring records found.";
 
-                const checkedAt =
-                    new Date(item.checked_at).toLocaleString();
-
-                row.innerHTML = `
-                    <td>${item.service}</td>
-                    <td class="${item.status === "UP" ? "healthy" : "unhealthy"}">
-                        ${item.status}
-                    </td>
-                    <td>${responseTime}</td>
-                    <td>${checkedAt}</td>
-                `;
-
+                row.appendChild(cell);
                 historyElement.appendChild(row);
-            });
 
-            document.getElementById("last-updated").innerText =
-                "Last dashboard refresh: " + new Date().toLocaleString();
+            } else {
+
+                data.history.forEach(item => {
+
+                    const row = document.createElement("tr");
+
+                    const serviceCell = document.createElement("td");
+                    serviceCell.textContent = item.service;
+
+                    const statusCell = document.createElement("td");
+                    statusCell.textContent = item.status;
+
+                    statusCell.className =
+                        item.status === "UP"
+                            ? "healthy"
+                            : "unhealthy";
+
+                    const responseCell = document.createElement("td");
+
+                    responseCell.textContent =
+                        item.response_time_ms !== null
+                            ? item.response_time_ms + " ms"
+                            : "--";
+
+                    const dateCell = document.createElement("td");
+
+                    dateCell.textContent =
+                        new Date(item.checked_at).toLocaleString();
+
+                    row.append(
+                        serviceCell,
+                        statusCell,
+                        responseCell,
+                        dateCell
+                    );
+
+                    historyElement.appendChild(row);
+                });
+            }
+
+
+            // Display refresh time
+            document.getElementById("last-updated").textContent =
+                "Last dashboard refresh: " +
+                new Date().toLocaleString();
+
 
         } catch (error) {
-            document.getElementById("last-updated").innerText =
+
+            document.getElementById("last-updated").textContent =
                 "Unable to load monitoring data: " + error.message;
+
         }
     }
+
 
     // Initial dashboard load
     loadMonitoringData();
 
-    // Refresh dashboard every 30 seconds
+
+    // Refresh every 30 seconds
     setInterval(loadMonitoringData, 30000);
+
 </script>
 
 </body>

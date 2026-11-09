@@ -5,6 +5,8 @@ from database import get_connection
 
 app = Flask(__name__)
 
+SLA_TARGET = 99.5
+
 
 # Home page
 @app.route("/")
@@ -138,10 +140,11 @@ def get_monitoring_data():
         SELECT
             service_name,
             COUNT(*) AS total_checks,
-            SUM(CASE WHEN status = 'UP' THEN 1 ELSE 0 END)
+            COUNT(*) FILTER (WHERE status = 'UP') AS successful_checks
         FROM monitoring_logs
         WHERE checked_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
         GROUP BY service_name
+        ORDER BY service_name
     """)
 
     availability_records = cursor.fetchall()
@@ -150,6 +153,7 @@ def get_monitoring_data():
     for record in availability_records:
         total = record[1]
         successful = record[2]
+        failed = total - successful
 
         percentage = (successful / total) * 100 if total else 0
 
@@ -157,7 +161,13 @@ def get_monitoring_data():
             "service": record[0],
             "total_checks": total,
             "successful_checks": successful,
-            "availability": round(percentage, 2)
+            "failed_checks": failed,
+            "availability": round(percentage, 2),
+            "sla_status": (
+                "COMPLIANT"
+                if percentage >= SLA_TARGET
+                else "VIOLATION"
+            )
         })
 
     # Get latest 10 monitoring records
@@ -188,7 +198,9 @@ def get_monitoring_data():
         "services": services,
         "availability": availability,
         "history": history,
-        "sla_target": 99.5
+        "sla_target": SLA_TARGET,
+        "monitoring_period": "Last 24 Hours",
+        "availability_method": "Check-based"
     }), 200
 
 
