@@ -6,30 +6,13 @@ from database import get_connection
 app = Flask(__name__)
 
 
-def init_db():
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patients (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            age INTEGER NOT NULL,
-            condition VARCHAR(150) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-
+# Home page
 @app.route("/")
 def home():
     return render_template("index.html")
 
 
+# Application health check
 @app.route("/health")
 def health():
     return jsonify({
@@ -39,6 +22,7 @@ def health():
     }), 200
 
 
+# Application status
 @app.route("/api/status")
 def status():
     return jsonify({
@@ -48,6 +32,7 @@ def status():
     }), 200
 
 
+# Get all patient records
 @app.route("/api/patients", methods=["GET"])
 def get_patients():
     connection = get_connection()
@@ -60,7 +45,6 @@ def get_patients():
     """)
 
     records = cursor.fetchall()
-
     patients = []
 
     for record in records:
@@ -78,6 +62,7 @@ def get_patients():
     return jsonify(patients), 200
 
 
+# Add a patient record
 @app.route("/api/patients", methods=["POST"])
 def add_patient():
     data = request.get_json(silent=True) or {}
@@ -118,4 +103,114 @@ def add_patient():
     }), 201
 
 
+# Monitoring dashboard API
+@app.route("/api/monitoring")
+def get_monitoring_data():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    # Get latest status of each service
+    cursor.execute("""
+        SELECT DISTINCT ON (service_name)
+            service_name,
+            status,
+            response_time_ms,
+            checked_at
+        FROM monitoring_logs
+        ORDER BY service_name, checked_at DESC
+    """)
+
+    latest_records = cursor.fetchall()
+    services = []
+
+    for record in latest_records:
+        services.append({
+            "service": record[0],
+            "status": record[1],
+            "response_time_ms": (
+                float(record[2]) if record[2] is not None else None
+            ),
+            "checked_at": record[3].isoformat()
+        })
+
+    # Calculate availability during the last 24 hours
+    cursor.execute("""
+        SELECT
+            service_name,
+            COUNT(*) AS total_checks,
+            SUM(CASE WHEN status = 'UP' THEN 1 ELSE 0 END)
+        FROM monitoring_logs
+        WHERE checked_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+        GROUP BY service_name
+    """)
+
+    availability_records = cursor.fetchall()
+    availability = []
+
+    for record in availability_records:
+        total = record[1]
+        successful = record[2]
+
+        percentage = (successful / total) * 100 if total else 0
+
+        availability.append({
+            "service": record[0],
+            "total_checks": total,
+            "successful_checks": successful,
+            "availability": round(percentage, 2)
+        })
+
+    # Get latest 10 monitoring records
+    cursor.execute("""
+        SELECT service_name, status, response_time_ms, checked_at
+        FROM monitoring_logs
+        ORDER BY checked_at DESC
+        LIMIT 10
+    """)
+
+    history_records = cursor.fetchall()
+    history = []
+
+    for record in history_records:
+        history.append({
+            "service": record[0],
+            "status": record[1],
+            "response_time_ms": (
+                float(record[2]) if record[2] is not None else None
+            ),
+            "checked_at": record[3].isoformat()
+        })
+
+    cursor.close()
+    connection.close()
+
+    return jsonify({
+        "services": services,
+        "availability": availability,
+        "history": history,
+        "sla_target": 99.5
+    }), 200
+
+
+# Initialize database
+def init_db():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patients (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            age INTEGER NOT NULL,
+            condition VARCHAR(150) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+
 init_db()
+

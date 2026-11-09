@@ -1,19 +1,22 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Healthcare Cloud Monitoring</title>
+    <title>Healthcare Cloud Monitoring Dashboard</title>
+
     <style>
         body {
             font-family: Arial, sans-serif;
             background: #f2f5f9;
             margin: 0;
-            padding: 30px;
+            padding: 25px;
+            color: #263445;
         }
 
         .container {
-            max-width: 850px;
+            max-width: 1100px;
             margin: auto;
         }
 
@@ -24,54 +27,255 @@
             border-radius: 10px;
         }
 
+        .header h1 {
+            margin-top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-top: 20px;
+        }
+
         .card {
             background: white;
-            padding: 22px;
-            margin-top: 20px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 8px #ddd;
         }
 
+        .card h3 {
+            margin-top: 0;
+            color: #526477;
+        }
+
+        .value {
+            font-size: 27px;
+            font-weight: bold;
+        }
+
         .healthy {
             color: green;
-            font-weight: bold;
+        }
+
+        .unhealthy {
+            color: red;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #edf2f7;
+        }
+
+        .note {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 12px;
+            }
+
+            .card {
+                overflow-x: auto;
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
+<div class="container">
 
-        <div class="header">
-            <h1>Healthcare Cloud Monitoring System</h1>
-            <p>Cloud-based Healthcare Application Dashboard</p>
+    <div class="header">
+        <h1>Healthcare Cloud Monitoring System</h1>
+        <p>AWS EC2 | Docker | Flask | PostgreSQL</p>
+        <p>Live Application Health and SLA Monitoring</p>
+    </div>
+
+    <div class="grid">
+
+        <div class="card">
+            <h3>Application Status</h3>
+            <div class="value" id="app-status">Loading...</div>
+            <p>Flask Application</p>
+            <p id="response-time">Response time: --</p>
         </div>
 
         <div class="card">
-            <h2>Application Overview</h2>
-            <p>Application: Healthcare Cloud System</p>
-            <p>Deployment: AWS EC2</p>
-            <p>Container Platform: Docker</p>
-            <p>Status: <span class="healthy">Running</span></p>
+            <h3>Database Status</h3>
+            <div class="value" id="db-status">Loading...</div>
+            <p>PostgreSQL Database</p>
         </div>
 
         <div class="card">
-            <h2>System Health</h2>
-            <p id="health">Checking application health...</p>
+            <h3>Application Availability</h3>
+            <div class="value" id="app-availability">--</div>
+            <p>Last 24 hours</p>
+        </div>
+
+        <div class="card">
+            <h3>Database Availability</h3>
+            <div class="value" id="db-availability">--</div>
+            <p>Last 24 hours</p>
+        </div>
+
+        <div class="card">
+            <h3>SLA Target</h3>
+            <div class="value" id="sla-target">99.5%</div>
+            <p>Target availability</p>
         </div>
 
     </div>
 
-    <script>
-        fetch("/health")
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("health").innerText =
-                    "Status: " + data.status;
-            })
-            .catch(() => {
-                document.getElementById("health").innerText =
-                    "Application health check failed";
+    <div class="card">
+        <h2>Recent Monitoring History</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Status</th>
+                    <th>Response Time</th>
+                    <th>Last Checked</th>
+                </tr>
+            </thead>
+
+            <tbody id="history">
+                <tr>
+                    <td colspan="4">Loading monitoring records...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>Monitoring Information</h3>
+        <p id="last-updated">Waiting for monitoring data...</p>
+        <p class="note">
+            Availability is calculated from recorded health checks
+            during the last 24 hours. It is an indicative metric,
+            not a contractual SLA measurement.
+        </p>
+    </div>
+
+</div>
+
+<script>
+    async function loadMonitoringData() {
+        try {
+            const response = await fetch("/api/monitoring");
+
+            if (!response.ok) {
+                throw new Error("Monitoring API request failed");
+            }
+
+            const data = await response.json();
+
+            // Display service status
+            const app = data.services.find(
+                item => item.service === "Flask Application"
+            );
+
+            const db = data.services.find(
+                item => item.service === "PostgreSQL Database"
+            );
+
+            function displayStatus(elementId, service) {
+                const element = document.getElementById(elementId);
+
+                if (service) {
+                    element.innerText = service.status;
+                    element.className =
+                        "value " +
+                        (service.status === "UP" ? "healthy" : "unhealthy");
+                } else {
+                    element.innerText = "NO DATA";
+                    element.className = "value unhealthy";
+                }
+            }
+
+            displayStatus("app-status", app);
+            displayStatus("db-status", db);
+
+            document.getElementById("response-time").innerText =
+                "Response time: " +
+                (app && app.response_time_ms !== null
+                    ? app.response_time_ms + " ms"
+                    : "--");
+
+            // Display availability
+            const appAvailability = data.availability.find(
+                item => item.service === "Flask Application"
+            );
+
+            const dbAvailability = data.availability.find(
+                item => item.service === "PostgreSQL Database"
+            );
+
+            document.getElementById("app-availability").innerText =
+                appAvailability ? appAvailability.availability + "%" : "--";
+
+            document.getElementById("db-availability").innerText =
+                dbAvailability ? dbAvailability.availability + "%" : "--";
+
+            document.getElementById("sla-target").innerText =
+                data.sla_target + "%";
+
+            // Display recent history
+            const historyElement = document.getElementById("history");
+            historyElement.innerHTML = "";
+
+            data.history.forEach(item => {
+                const row = document.createElement("tr");
+
+                const responseTime =
+                    item.response_time_ms !== null
+                        ? item.response_time_ms + " ms"
+                        : "--";
+
+                const checkedAt =
+                    new Date(item.checked_at).toLocaleString();
+
+                row.innerHTML = `
+                    <td>${item.service}</td>
+                    <td class="${item.status === "UP" ? "healthy" : "unhealthy"}">
+                        ${item.status}
+                    </td>
+                    <td>${responseTime}</td>
+                    <td>${checkedAt}</td>
+                `;
+
+                historyElement.appendChild(row);
             });
-    </script>
+
+            document.getElementById("last-updated").innerText =
+                "Last dashboard refresh: " + new Date().toLocaleString();
+
+        } catch (error) {
+            document.getElementById("last-updated").innerText =
+                "Unable to load monitoring data: " + error.message;
+        }
+    }
+
+    // Initial dashboard load
+    loadMonitoringData();
+
+    // Refresh dashboard every 30 seconds
+    setInterval(loadMonitoringData, 30000);
+</script>
+
 </body>
 </html>
+
