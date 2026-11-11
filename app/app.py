@@ -1,11 +1,59 @@
-
 from flask import Flask, jsonify, render_template, request
 from datetime import datetime
 from database import get_connection
+from werkzeug.exceptions import HTTPException
+import boto3
+import os
 
 app = Flask(__name__)
 
 SLA_TARGET = 99.5
+
+# CloudWatch configuration
+CLOUDWATCH_NAMESPACE = "Healthcare/Application"
+
+
+# Handle unexpected application errors
+@app.errorhandler(Exception)
+def handle_application_error(error):
+
+    # Do not count normal HTTP errors such as 404
+    if isinstance(error, HTTPException):
+        return error
+
+    # Write the error to application logs
+    app.logger.exception("Unexpected application error")
+
+    try:
+        # Connect to CloudWatch using the EC2 IAM role
+        cloudwatch = boto3.client(
+            "cloudwatch",
+            region_name=os.getenv("AWS_REGION", "ap-southeast-2")
+        )
+
+        # Publish application error metric
+        cloudwatch.put_metric_data(
+            Namespace=CLOUDWATCH_NAMESPACE,
+            MetricData=[
+                {
+                    "MetricName": "ApplicationErrorCount",
+                    "Value": 1,
+                    "Unit": "Count"
+                }
+            ]
+        )
+
+        app.logger.info("Application error metric published to CloudWatch")
+
+    except Exception:
+        # Monitoring failure must not hide the original application error
+        app.logger.exception("Failed to publish metric to CloudWatch")
+
+    return jsonify({
+        "error": "Internal server error",
+        "message": "An unexpected application error occurred."
+    }), 500
+
 
 
 # Home page
@@ -22,7 +70,6 @@ def health():
         "application": "Healthcare Cloud Monitoring System",
         "timestamp": datetime.utcnow().isoformat()
     }), 200
-
 
 # Application status
 @app.route("/api/status")
